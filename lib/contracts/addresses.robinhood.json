@@ -1,17 +1,17 @@
 {
   "chainId": 4663,
-  "deploymentBlock": 5276647,
+  "deploymentBlock": 8676084,
   "contracts": {
-    "cardsToken": "0x6442c416b38f94e967f9728078b440267348cf02",
-    "cardsOnChain": "0xbd140493ad66a8953221d56f7cde0cf5beefee21",
-    "stakingVault": "0x0563eb6af498ce8c63916aa3322fd2c188bec44c",
-    "cardYield": "0x9cf00549d2e34dbf24f3a41713b2ac2f7d3a159e",
-    "cardArt": "0xa116eb1c26505b221de6b1966e3703591119fa16",
-    "cardRenderer": "0x5520978240360c2c4c8d358ac3b97623c87724d2",
-    "quoteSim": "0xda54b82272ffa42f254d07d462fdfaf40824866f",
-    "lpRouter": "0x064cdbeb3288be5579d4a25555477f227a30e529",
-    "mintHook": "0xfe5237f6d5950d77a3bc22af8d15f0e9b5b180cc",
-    "lpLocker": "0x2efdf36538d7cff9888f1b27b90b29564f2bf755",
+    "cardsToken": "0xf18203296296296103e0c11de4fb32aaff069515",
+    "cardsOnChain": "0xf458c9ff48015ea33f9c19192dba3a8afdbdbadc",
+    "stakingVault": "0x343d137f6c99680160b5075a8c480509d3b784c6",
+    "cardYield": "0xa5cd0470de67d4b2f32391ba49fbf2b84fa67db5",
+    "cardArt": "0xefb6060290bb955293fe88061da4ebdb52e1c4ab",
+    "cardRenderer": "0xa4c50df9590b2322870ba78d015c9692ad5c8043",
+    "quoteSim": "0x0f0d2044c760b764ef527300f1586d66570170b5",
+    "lpRouter": "0x7d4bda106ed3a00c2bcacf1bbf26b417869cc690",
+    "mintHook": "0xe55c77e56b9f9800b549d13a5e7c7c5ca0ee00cc",
+    "lpLocker": "0xfe59e84b955b5c27a4a76da5260b2478979de691",
     "swapRouter": "0x8876789976decbfcbbbe364623c63652db8c0904",
     "poolManager": "0x8366a39cc670b4001a1121b8f6a443a643e40951"
   }
