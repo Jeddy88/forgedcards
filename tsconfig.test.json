@@ -1,0 +1,25 @@
+{
+  "//": "Compiles the framework-free unit tests (lib/format + lib/chain pure helpers) and their deps to .test-build/ as CommonJS, which `npm run test:unit` then runs with `node --test`. Kept separate from the Next build so app imports stay extensionless.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "outDir": ".test-build",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "types": ["node"]
+  },
+  "include": [
+    "lib/format.ts",
+    "lib/format.test.ts",
+    "lib/chain/math.ts",
+    "lib/chain/material.ts",
+    "lib/chain/math.test.ts",
+    "lib/chain/liquidity.ts",
+    "lib/chain/liquidity.test.ts"
+  ]
+}

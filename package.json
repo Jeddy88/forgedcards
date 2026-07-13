@@ -1,0 +1,46 @@
+{
+  "name": "cards-onchain-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:local": "node scripts/run-next.mjs dev local",
+    "dev:sepolia": "node scripts/run-next.mjs dev sepolia",
+    "dev:robinhood": "node scripts/run-next.mjs dev robinhood",
+    "dev:mainnet": "node scripts/run-next.mjs dev mainnet",
+    "build": "next build",
+    "build:sepolia": "node scripts/run-next.mjs build sepolia",
+    "build:robinhood": "node scripts/run-next.mjs build robinhood",
+    "build:mainnet": "node scripts/run-next.mjs build mainnet",
+    "start": "next start",
+    "lint": "next lint",
+    "test:unit": "tsc -p tsconfig.test.json && node --test .test-build/lib/format.test.js .test-build/lib/chain/math.test.js .test-build/lib/chain/liquidity.test.js",
+    "abis": "node scripts/extract-abis.mjs",
+    "addresses": "node scripts/gen-addresses.mjs local",
+    "addresses:local": "node scripts/gen-addresses.mjs local",
+    "addresses:sepolia": "node scripts/gen-addresses.mjs sepolia",
+    "addresses:robinhood": "node scripts/gen-addresses.mjs robinhood",
+    "addresses:mainnet": "node scripts/gen-addresses.mjs mainnet",
+    "verify:flows": "node scripts/verify-flows.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.101.2",
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "viem": "^2.54.3",
+    "wagmi": "^3.6.21"
+  },
+  "overrides": {
+    "postcss": "$postcss"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 460">
+  <!-- Favicon: the F-C monogram from src/render/CardArt.sol (RING_FACE + F_FACE,
+       same geometry as components/Logo.tsx) in brand lime on the card-back
+       near-black body. Next.js App Router serves app/icon.svg automatically;
+       see DESIGN.md for the PNG fallback note. -->
+  <rect width="460" height="460" rx="92" fill="#0b0b10"/>
+  <g transform="translate(230 230) scale(1.38) translate(-230 -300)"
+     fill="none" stroke="#CCFF00" stroke-width="13" stroke-linecap="round">
+    <path d="M309.7 282.8A46 46 0 1 0 309.7 317.2"/>
+    <path d="M147 254V346"/>
+    <path d="M147 254H207"/>
+    <path d="M147 300H207"/>
+  </g>
+</svg>

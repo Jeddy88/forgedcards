@@ -1,0 +1,18 @@
+{
+  "chainId": 4663,
+  "deploymentBlock": 5276647,
+  "contracts": {
+    "cardsToken": "0x6442c416b38f94e967f9728078b440267348cf02",
+    "cardsOnChain": "0xbd140493ad66a8953221d56f7cde0cf5beefee21",
+    "stakingVault": "0x0563eb6af498ce8c63916aa3322fd2c188bec44c",
+    "cardYield": "0x9cf00549d2e34dbf24f3a41713b2ac2f7d3a159e",
+    "cardArt": "0xa116eb1c26505b221de6b1966e3703591119fa16",
+    "cardRenderer": "0x5520978240360c2c4c8d358ac3b97623c87724d2",
+    "quoteSim": "0xda54b82272ffa42f254d07d462fdfaf40824866f",
+    "lpRouter": "0x064cdbeb3288be5579d4a25555477f227a30e529",
+    "mintHook": "0xfe5237f6d5950d77a3bc22af8d15f0e9b5b180cc",
+    "lpLocker": "0x2efdf36538d7cff9888f1b27b90b29564f2bf755",
+    "swapRouter": "0x8876789976decbfcbbbe364623c63652db8c0904",
+    "poolManager": "0x8366a39cc670b4001a1121b8f6a443a643e40951"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "comment": "Ethereum mainnet deployment — NOT DEPLOYED YET. Every address below is deliberately the UNSET sentinel; the config module refuses to build a mainnet app while any sentinel remains. Fill these from the audited production deployment broadcast, checksummed, and set deploymentBlock to the deploy block. poolManager IS known (canonical Uniswap V4 singleton) but is left UNSET too so the whole file is wired in one reviewed step. Canonical V4 PoolManager for reference: 0x000000000004444c5dc75cB358380D2e3dE08A90.",
+  "chainId": 1,
+  "deploymentBlock": 0,
+  "contracts": {
+    "cardsToken": "UNSET",
+    "cardsOnChain": "UNSET",
+    "stakingVault": "UNSET",
+    "cardYield": "UNSET",
+    "cardArt": "UNSET",
+    "cardRenderer": "UNSET",
+    "swapRouter": "UNSET",
+    "quoteSim": "UNSET",
+    "lpRouter": "UNSET",
+    "mintHook": "UNSET",
+    "poolManager": "UNSET"
+  }
+}

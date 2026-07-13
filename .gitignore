@@ -1,0 +1,36 @@
+# ---- secrets (NEVER commit) -------------------------------------------
+# Env files can hold private/keyed RPC URLs (e.g. NEXT_PUBLIC_RPC_URLS in
+# .env.local). The repo-root .gitignore covers these today, but this folder
+# must stay safe even when pushed as its OWN repository.
+.env
+.env.*
+!.env.example
+
+# ---- build output / caches --------------------------------------------
+node_modules/
+.next/
+out/
+.test-build/
+*.tsbuildinfo
+next-env.d.ts
+.turbo/
+
+# ---- hosting-provider state -------------------------------------------
+.vercel/
+.netlify/
+
+# ---- logs & debug -------------------------------------------------------
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- OS / editor noise ---------------------------------------------------
+.DS_Store
+Thumbs.db
+
+DESIGN.md
+SECURITY.md
+
+# ---- local AI/dev tooling state (not app code) ----------------------------
+.claude/
