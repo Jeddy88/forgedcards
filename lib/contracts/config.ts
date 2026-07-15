@@ -192,7 +192,13 @@ const DEFAULT_RPC: Record<ChainEnvName, string> = {
   // Public keyless Sepolia endpoint: the safe fallback a BUILD uses when the
   // .env RPC is a private/keyed endpoint (run-next.mjs refuses to embed those).
   sepolia: "https://ethereum-sepolia-rpc.publicnode.com",
-  robinhood: "https://rpc.mainnet.chain.robinhood.com",
+  // Robinhood reads go PRIMARILY through the owner's Cloudflare Worker proxy
+  // (2026-07-13): it forwards to a private Alchemy endpoint whose key lives as
+  // a server-side secret — this URL is public and keyless, safe to embed. The
+  // chain's public RPC stays as the automatic fallback (the viem fallback
+  // transport fails over if the Worker is ever unreachable). The Worker is
+  // read-only (method whitelist) — see proxy/rpc-worker.js in the project root.
+  robinhood: "https://rpc-worker.forgedcardsv4.workers.dev,https://rpc.mainnet.chain.robinhood.com",
   mainnet: "https://ethereum-rpc.publicnode.com,https://eth.llamarpc.com",
 };
 

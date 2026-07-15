@@ -51,15 +51,18 @@ if (cmd === "build" && env.NEXT_PUBLIC_RPC_URLS && isKeyed(env.NEXT_PUBLIC_RPC_U
   process.exit(1);
 }
 
-// Auto-wire the read-RPC for live networks from the repo-root .env (unless preset).
-// Ordered candidates: for Robinhood Chain prefer the PUBLIC endpoint.
+// Auto-wire the read-RPC from the repo-root .env — DEV ONLY (2026-07-13): builds
+// use the production RPC policy baked into lib/contracts/config.ts DEFAULT_RPC
+// (for Robinhood: the key-hiding Worker proxy + public fallback). Auto-wiring a
+// .env endpoint into a BUILD would silently override that policy. For dev, the
+// fast private endpoint is preferred (bundle never leaves this machine).
 const RPC_ENV_FOR = {
   sepolia: ["SEPOLIA_RPC_URL"],
-  robinhood: ["ROBINHOOD_PUBLIC_RPC_URL", "ROBINHOOD_RPC_URL"],
+  robinhood: ["ROBINHOOD_RPC_URL", "ROBINHOOD_PUBLIC_RPC_URL"],
   mainnet: ["MAINNET_RPC_URL"],
 };
 let rpcEnvUsed;
-if (RPC_ENV_FOR[network] && !env.NEXT_PUBLIC_RPC_URLS) {
+if (cmd === "dev" && RPC_ENV_FOR[network] && !env.NEXT_PUBLIC_RPC_URLS) {
   const dotenv = resolve(here, "../../.env");
   if (existsSync(dotenv)) {
     const fromEnv = {};
