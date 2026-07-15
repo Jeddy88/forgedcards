@@ -39,32 +39,62 @@ const TIER_CHANGED = parseAbiItem(
 /**
  * Chunked block-range walk for range-capped RPCs. `fetchRange` does the actual
  * typed `client.getLogs` call for one range (viem infers `.args` cleanly at the
- * call site, with `strict: true`); this only handles the [deploymentBlock,
- * latest] chunking so the fetcher's return type is preserved (no casts).
+ * call site, with `strict: true`); this handles the chunking so the fetcher's
+ * return type is preserved (no casts).
+ *
+ * REQUEST-QUOTA HARDENING (2026-07-13 — the deployment is ~1.65M blocks old, so
+ * a naive full walk is ~180 requests PER SCAN, and 9 scans re-ran every 30s ≈
+ * thousands of requests per minute against the RPC proxy's daily quota):
+ *  - INCREMENTAL: each scan key remembers the last block it has seen (plus the
+ *    accumulated logs) for the lifetime of the page. The full [deploymentBlock,
+ *    latest] walk happens ONCE per visit; every later poll fetches only the
+ *    handful of NEW blocks — one small request instead of ~180.
+ *  - PARALLEL chunks: the first walk fires its ranges concurrently, so the
+ *    transport's JSON-RPC batching (lib/wagmi.ts) folds them into a few HTTP
+ *    requests instead of ~180 sequential round-trips.
+ * Logs are append-only per key (mined history never mutates); the block cursor
+ * only moves forward, and all data here remains a HINT re-verified against view
+ * functions before it drives a transaction (the house rule above).
  */
+const scanCache = new Map<string, { nextFrom: bigint; items: unknown[] }>();
+
 async function scan<T>(
   client: PublicClient,
+  key: string,
   fetchRange: (fromBlock: bigint, toBlock: bigint) => Promise<T[]>,
 ): Promise<T[]> {
   const latest = await client.getBlockNumber();
-  const from = ENV.deploymentBlock;
-  if (LOG_CHUNK === 0n) return fetchRange(from, latest);
-  const out: T[] = [];
-  for (let start = from; start <= latest; start += LOG_CHUNK) {
-    const end = start + LOG_CHUNK - 1n > latest ? latest : start + LOG_CHUNK - 1n;
-    out.push(...(await fetchRange(start, end)));
+  const cached = scanCache.get(key) as { nextFrom: bigint; items: T[] } | undefined;
+  const from = cached?.nextFrom ?? ENV.deploymentBlock;
+
+  let fresh: T[] = [];
+  if (from <= latest) {
+    if (LOG_CHUNK === 0n) {
+      fresh = await fetchRange(from, latest);
+    } else {
+      const ranges: Array<[bigint, bigint]> = [];
+      for (let start = from; start <= latest; start += LOG_CHUNK) {
+        const end = start + LOG_CHUNK - 1n > latest ? latest : start + LOG_CHUNK - 1n;
+        ranges.push([start, end]);
+      }
+      // Concurrent on purpose: the batched transport coalesces these.
+      fresh = (await Promise.all(ranges.map(([s, e]) => fetchRange(s, e)))).flat();
+    }
   }
-  return out;
+
+  const items = cached ? [...cached.items, ...fresh] : fresh;
+  scanCache.set(key, { nextFrom: latest + 1n, items });
+  return items;
 }
 
 /** Token ids currently owned by `wallet` (Transfer replay; mint = from 0x0). */
 export async function fetchOwnedTokenIds(client: PublicClient, wallet: Address): Promise<bigint[]> {
   const cards = addressOf("cardsOnChain");
   const [incoming, outgoing] = await Promise.all([
-    scan(client, (fromBlock, toBlock) =>
+    scan(client, 'owned-in:' + wallet.toLowerCase(), (fromBlock, toBlock) =>
       client.getLogs({ address: cards, event: TRANSFER, args: { to: wallet }, strict: true, fromBlock, toBlock }),
     ),
-    scan(client, (fromBlock, toBlock) =>
+    scan(client, 'owned-out:' + wallet.toLowerCase(), (fromBlock, toBlock) =>
       client.getLogs({ address: cards, event: TRANSFER, args: { from: wallet }, strict: true, fromBlock, toBlock }),
     ),
   ]);
@@ -89,16 +119,16 @@ export async function fetchOwnedTokenIds(client: PublicClient, wallet: Address):
 export async function fetchLiveForgeIds(client: PublicClient): Promise<bigint[]> {
   const vault = addressOf("stakingVault");
   const [started, cancelled, claimed, swept] = await Promise.all([
-    scan(client, (fromBlock, toBlock) =>
+    scan(client, 'forge-started', (fromBlock, toBlock) =>
       client.getLogs({ address: vault, event: FORGE_STARTED, strict: true, fromBlock, toBlock }),
     ),
-    scan(client, (fromBlock, toBlock) =>
+    scan(client, 'forge-cancelled', (fromBlock, toBlock) =>
       client.getLogs({ address: vault, event: FORGE_CANCELLED, strict: true, fromBlock, toBlock }),
     ),
-    scan(client, (fromBlock, toBlock) =>
+    scan(client, 'forge-claimed', (fromBlock, toBlock) =>
       client.getLogs({ address: vault, event: FORGE_CLAIMED, strict: true, fromBlock, toBlock }),
     ),
-    scan(client, (fromBlock, toBlock) =>
+    scan(client, 'forge-swept', (fromBlock, toBlock) =>
       client.getLogs({ address: vault, event: FORGE_SWEPT, strict: true, fromBlock, toBlock }),
     ),
   ]);
@@ -127,7 +157,7 @@ export async function fetchLiveForgeIds(client: PublicClient): Promise<bigint[]>
  */
 export async function fetchEverNonCommonTokenIds(client: PublicClient): Promise<bigint[]> {
   const cards = addressOf("cardsOnChain");
-  const changed = await scan(client, (fromBlock, toBlock) =>
+  const changed = await scan(client, 'tier-changed', (fromBlock, toBlock) =>
     client.getLogs({ address: cards, event: TIER_CHANGED, strict: true, fromBlock, toBlock }),
   );
   const ids = new Set<bigint>();
@@ -143,10 +173,10 @@ export async function fetchRewardTotals(
   client: PublicClient,
 ): Promise<{ stakerRewardsDeposited: bigint; cardYieldDeposited: bigint }> {
   const [vaultLogs, yieldLogs] = await Promise.all([
-    scan(client, (fromBlock, toBlock) =>
+    scan(client, 'rewards-vault', (fromBlock, toBlock) =>
       client.getLogs({ address: addressOf("stakingVault"), event: REWARDS_DEPOSITED_VAULT, strict: true, fromBlock, toBlock }),
     ),
-    scan(client, (fromBlock, toBlock) =>
+    scan(client, 'rewards-yield', (fromBlock, toBlock) =>
       client.getLogs({ address: addressOf("cardYield"), event: REWARDS_DEPOSITED_YIELD, strict: true, fromBlock, toBlock }),
     ),
   ]);
@@ -169,7 +199,7 @@ export async function fetchCardHistory(
   tierStakes: readonly bigint[],
   tierDurations: readonly string[],
 ): Promise<TierHistoryEntry[]> {
-  const changes = await scan(client, (fromBlock, toBlock) =>
+  const changes = await scan(client, 'history:' + tokenId.toString(), (fromBlock, toBlock) =>
     client.getLogs({ address: addressOf("cardsOnChain"), event: TIER_CHANGED, args: { tokenId }, strict: true, fromBlock, toBlock }),
   );
   const entries: TierHistoryEntry[] = changes.map((log) => {

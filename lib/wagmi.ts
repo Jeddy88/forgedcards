@@ -38,12 +38,27 @@ const robinhood = defineChain({
   blockExplorers: {
     default: { name: "Blockscout", url: "https://robinhoodchain.blockscout.com" },
   },
+  contracts: {
+    // Canonical Multicall3 — verified deployed on Robinhood Chain (2026-07-13,
+    // eth_getCode 3,808 bytes). With this present wagmi/viem AGGREGATES batched
+    // reads into a single eth_call — the per-poll read burst (cards, yields,
+    // raid statuses…) collapses from dozens of requests to ~one, which is what
+    // keeps the RPC-proxy Worker inside its free request quota.
+    multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11", blockCreated: 1 },
+  },
 });
 
 // Exactly ONE chain per build — pinned by the environment. Split the branches
 // so each createConfig call has a single-chain literal type (the transports
 // Record must key precisely that chain id).
-const rpcTransports = RPC_URLS.map((url) => http(url));
+//
+// JSON-RPC BATCHING (2026-07-13, request-quota fix): concurrent calls within a
+// tick are folded into ONE HTTP request (the RPC-proxy Worker accepts batches up
+// to 100 — see proxy/rpc-worker.js MAX_BATCH). Together with Multicall3 this
+// collapses the connected-wallet polling burst from dozens of HTTP requests per
+// cycle to ~one, keeping the Worker inside its free daily request quota.
+const BATCH = { batch: { batchSize: 50 } } as const;
+const rpcTransports = RPC_URLS.map((url) => http(url, BATCH));
 
 export const wagmiConfig =
   CHAIN_ENV === "mainnet"
@@ -52,7 +67,7 @@ export const wagmiConfig =
         connectors: [injected()],
         transports: {
           // fallback ranks the configured RPCs, then the chain's public RPC.
-          [mainnet.id]: fallback([...rpcTransports, http()]),
+          [mainnet.id]: fallback([...rpcTransports, http(undefined, BATCH)]),
         },
         ssr: true,
       })
@@ -62,7 +77,7 @@ export const wagmiConfig =
           connectors: [injected()],
           transports: {
             // fallback ranks the configured RPCs, then the chain's public RPC.
-            [robinhood.id]: fallback([...rpcTransports, http()]),
+            [robinhood.id]: fallback([...rpcTransports, http(undefined, BATCH)]),
           },
           ssr: true,
         })
@@ -71,7 +86,7 @@ export const wagmiConfig =
             chains: [sepolia],
             connectors: [injected()],
             transports: {
-              [sepolia.id]: fallback([...rpcTransports, http()]),
+              [sepolia.id]: fallback([...rpcTransports, http(undefined, BATCH)]),
             },
             ssr: true,
           })
