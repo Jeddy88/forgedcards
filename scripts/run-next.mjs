@@ -58,7 +58,7 @@ if (cmd === "build" && env.NEXT_PUBLIC_RPC_URLS && isKeyed(env.NEXT_PUBLIC_RPC_U
 // fast private endpoint is preferred (bundle never leaves this machine).
 const RPC_ENV_FOR = {
   sepolia: ["SEPOLIA_RPC_URL"],
-  robinhood: ["ROBINHOOD_RPC_URL", "ROBINHOOD_PUBLIC_RPC_URL"],
+  robinhood: ["ROBINHOOD_PUBLIC_RPC_URL", "ROBINHOOD_RPC_URL"],
   mainnet: ["MAINNET_RPC_URL"],
 };
 let rpcEnvUsed;

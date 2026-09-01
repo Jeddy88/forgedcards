@@ -20,6 +20,8 @@
     "lib/chain/material.ts",
     "lib/chain/math.test.ts",
     "lib/chain/liquidity.ts",
-    "lib/chain/liquidity.test.ts"
+    "lib/chain/liquidity.test.ts",
+    "lib/chain/rpcRoutingPolicy.ts",
+    "lib/chain/rpcRoutingPolicy.test.ts"
   ]
 }

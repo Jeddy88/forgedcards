@@ -49,6 +49,7 @@ export interface Snapshot {
 
   cardsOnChain: {
     totalSupply: bigint; //        CardsOnChain.totalSupply() (== totalEverMinted, no burns)
+    totalEverMinted: bigint; //    CardsOnChain.totalEverMinted() — ids are 1..this
     maxSupply: bigint; //          CardsOnChain.maxSupply() = 2222
     remainingMintable: bigint; //  CardsOnChain.remainingMintable()
     /** CardsOnChain.tierCount(tier) for tier 0..4. For tiers 1-4 this INCLUDES
@@ -98,11 +99,6 @@ export interface Snapshot {
 
   /** Derived from events, NOT views — the dApp agent sources these from an
    *  indexer or log scan (sum of RewardsDeposited event amounts per contract). */
-  eventTotals: {
-    stakerRewardsDeposited: bigint; // Σ StakingVault.RewardsDeposited (buy fees)
-    cardYieldDeposited: bigint; //     Σ CardYield.RewardsDeposited (sell fees)
-  };
-
   /** Design-time price fixture. NOT a contract view: the dApp agent replaces
    *  this with a V4 Quoter simulation against MintHook.poolKey(). The launch
    *  numbers come from script/CurveModel.md (start ~499,491 FORGE/ETH). */

@@ -16,13 +16,13 @@ import {
   SkeletonPanel,
   Stat,
 } from "@/components/ui";
-import { useApp } from "@/lib/live";
+import { useApp, useSnapshot } from "@/lib/live";
 import { formatOcards, shortAddress } from "@/lib/format";
 import { tierInfo } from "@/lib/tiers";
 import { cardsOnChainAbi, stakingVaultAbi } from "@/lib/contracts/abis";
 import { addressOf } from "@/lib/contracts/config";
 import { materialOf } from "@/lib/chain/material";
-import { fetchEverNonCommonTokenIds } from "@/lib/chain/logs";
+import { fetchNonCommonTokenIds } from "@/lib/chain/views";
 import { protectionRequired } from "@/lib/actions";
 
 /** One non-Common card, assembled from the live views (never from logs alone). */
@@ -41,17 +41,21 @@ const STRIDE = 5;
 export default function RaidBoardPage() {
   const { dataMode, connected, wallet } = useApp();
   const publicClient = usePublicClient();
+  const snap = useSnapshot();
+  const totalEverMinted = snap.cardsOnChain.totalEverMinted;
   const [target, setTarget] = useState<RaidTarget | null>(null);
 
   const cards = addressOf("cardsOnChain");
   const vault = addressOf("stakingVault");
 
-  // Only cards that have EVER been non-Common can be raided — a tiny superset (bounded by
-  // the tier caps, not the 2,222 supply). Re-verified against live views below.
+  // Only non-Common cards can be raided. Read from `tierOf` across the
+  // collection (lib/chain/views.ts) rather than a full-history log scan — the
+  // sweep is Multicall3-aggregated and bounded by the 2,222-card cap, and it
+  // returns EXACT current tiers instead of an "ever non-Common" superset.
   const idsQ = useQuery({
-    queryKey: ["everNonCommonTokenIds"],
-    queryFn: () => fetchEverNonCommonTokenIds(publicClient!),
-    enabled: !!publicClient,
+    queryKey: ["nonCommonTokenIds", totalEverMinted.toString()],
+    queryFn: () => fetchNonCommonTokenIds(publicClient!, totalEverMinted),
+    enabled: !!publicClient && totalEverMinted > 0n,
     refetchInterval: 30_000,
   });
   const ids = useMemo(() => idsQ.data ?? [], [idsQ.data]);

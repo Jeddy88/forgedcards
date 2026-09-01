@@ -28,7 +28,6 @@ import { TIERS, tierInfo } from "@/lib/tiers";
 import { cardsOnChainAbi, cardYieldAbi, stakingVaultAbi } from "@/lib/contracts/abis";
 import { addressOf } from "@/lib/contracts/config";
 import { materialOf } from "@/lib/chain/material";
-import { fetchCardHistory } from "@/lib/chain/logs";
 import { cancelForgeAction, claimForgeAction, claimYieldAction } from "@/lib/actions";
 import { useTx } from "@/lib/tx";
 
@@ -64,6 +63,8 @@ export default function CardDetailPage() {
       { address: vault, abi: stakingVaultAbi, functionName: "protectorOf", args: [id ?? 0n] },
       { address: cards, abi: cardsOnChainAbi, functionName: "raidGraceFrom", args: [id ?? 0n] },
       { address: cards, abi: cardsOnChainAbi, functionName: "raidStatus", args: [id ?? 0n] },
+      // 12 — how many times this card has been forged (drives the timeline).
+      { address: cards, abi: cardsOnChainAbi, functionName: "forgeCount", args: [id ?? 0n] },
     ],
     query: { enabled: id !== null, refetchInterval: 12_000 },
   });
@@ -85,6 +86,7 @@ export default function CardDetailPage() {
         protector: (r![9].result as `0x${string}`) ?? ("0x0000000000000000000000000000000000000000" as `0x${string}`),
         raidGraceFrom: BigInt((r![10].result as bigint) ?? 0n),
         raidStatus: Number((r![11].result as number) ?? 0),
+        forgeCount: BigInt((r![12].result as bigint) ?? 0n),
         material: materialOf(r![2].result as `0x${string}`, Number(r![1].result as number)),
       }
     : null;
@@ -131,20 +133,6 @@ export default function CardDetailPage() {
         }
       : null;
 
-  const historyQ = useQuery({
-    queryKey: ["cardHistory", id?.toString()],
-    queryFn: () =>
-      fetchCardHistory(
-        publicClient!,
-        id!,
-        TIERS.map((t) => t.name),
-        TIERS.map((t) => t.stake),
-        TIERS.map((t) => t.durationLabel),
-      ),
-    enabled: exists && !!publicClient,
-    refetchInterval: 60_000,
-  });
-
   const isOwner = connected && !!card && card.owner.toLowerCase() === wallet.toLowerCase();
   const forge =
     card && card.activeForgeId !== 0n
@@ -157,7 +145,23 @@ export default function CardDetailPage() {
   // upgrade until it's actually swept (then the forge vanishes from the snapshot).
   const forgeSweepable = !!forge && (forge.isSweepable || nowS >= Number(forge.claimDeadline));
   const t = card ? tierInfo(card.tier) : null;
-  const history = historyQ.data ?? [];
+  // Timeline from ON-CHAIN METADATA, not an event scan: this chain produces
+  // ~10 blocks/second, so replaying TierChanged logs from the deployment block
+  // had grown to thousands of requests and rate-limited the RPC. `mintedAt` +
+  // `forgeCount` + the current tier give the same story for a single read.
+  const history = card
+    ? [
+        ...(card.forgeCount > 0n
+          ? [
+              {
+                label: `Forged ${card.forgeCount === 1n ? "once" : `${card.forgeCount} times`} — now ${tierInfo(card.tier).name}`,
+                detail: `${TIERS[card.tier].stake / 10n ** 18n} FORGE was locked for the final forge, then returned`,
+              },
+            ]
+          : []),
+        { label: "Minted at Common", detail: `via a pool buy on ${formatMintDate(card.mintedAt)}` },
+      ]
+    : [];
   const loading = dataMode === "loading" || (id !== null && cardQ.isPending);
 
   return (
@@ -419,9 +423,6 @@ export default function CardDetailPage() {
                     </div>
                   </li>
                 ))}
-                {historyQ.isPending && (
-                  <li className="text-xs text-faint">Loading history…</li>
-                )}
               </ol>
             </Panel>
           </div>

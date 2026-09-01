@@ -328,18 +328,36 @@ export async function fetchUserPoolPositions(
   // 1. Candidate tokenIds: everything ever transferred TO the user.
   const latest = await client.getBlockNumber();
   const from = ENV.deploymentBlock;
-  const step = LOG_CHUNK > 0n ? LOG_CHUNK : latest - from + 1n;
   const ids = new Set<bigint>();
-  for (let start = from; start <= latest; start += step) {
-    const end = start + step - 1n > latest ? latest : start + step - 1n;
-    const logs = await client.getLogs({
+
+  // ONE request over the whole range (2026-09-01). This query is filtered by an
+  // INDEXED recipient topic, so the node answers it from its index cheaply —
+  // measured at ~0.6s over the full history on the public Robinhood RPC. The
+  // old LOG_CHUNK slicing issued ~4,775 requests here and grew by ~96 more per
+  // day on a ~10-blocks-per-second chain, which rate-limited the endpoint (and
+  // rate-limit replies carry no CORS headers, so browsers reported them as CORS
+  // failures). Chunking is kept ONLY as a fallback for nodes that refuse wide
+  // ranges.
+  const collect = (logs: { args: { tokenId?: bigint } }[]) => {
+    for (const l of logs) if (l.args.tokenId !== undefined) ids.add(l.args.tokenId);
+  };
+  const query = (fromBlock: bigint, toBlock: bigint) =>
+    client.getLogs({
       address: positionManagerAddress,
       event: TRANSFER_EVENT,
       args: { to: user },
-      fromBlock: start,
-      toBlock: end,
+      fromBlock,
+      toBlock,
     });
-    for (const l of logs) if (l.args.tokenId !== undefined) ids.add(l.args.tokenId);
+
+  try {
+    collect(await query(from, latest));
+  } catch {
+    const step = LOG_CHUNK > 0n ? LOG_CHUNK : latest - from + 1n;
+    for (let start = from; start <= latest; start += step) {
+      const end = start + step - 1n > latest ? latest : start + step - 1n;
+      collect(await query(start, end));
+    }
   }
   if (ids.size === 0) return [];
 

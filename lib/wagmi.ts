@@ -5,9 +5,11 @@
  *
  * - Connector: injected (MetaMask & friends). No WalletConnect (no external
  *   scripts/relays, keeps CSP tight); add one deliberately if the owner asks.
- * - Transport: `fallback()` over the configured RPC list, then the chain's
- *   default public RPC (live chains) — resilient reads with automatic ranking.
- * - Reads work with NO wallet (public client); the wallet is only for writes.
+ * - Transport: WALLET-FIRST reads (lib/chain/walletTransport.ts) — the public
+ *   keyless RPC before a wallet connects, the visitor's own wallet RPC after,
+ *   with automatic fallback to public. The project runs no RPC of its own.
+ * - Reads work with NO wallet (public client); the wallet adds its own read
+ *   capacity once connected, and has always been the only signer.
  * - Private keys are never touched: signing stays inside the injected wallet.
  */
 import { createConfig, fallback, http } from "wagmi";
@@ -15,6 +17,7 @@ import { mainnet, sepolia } from "wagmi/chains";
 import { defineChain } from "viem";
 import { injected } from "wagmi/connectors";
 import { CHAIN_ENV, PINNED_CHAIN_ID, RPC_URLS } from "@/lib/contracts/config";
+import { walletFirstTransport } from "@/lib/chain/walletTransport";
 
 const anvil = defineChain({
   id: 31337,
@@ -42,8 +45,8 @@ const robinhood = defineChain({
     // Canonical Multicall3 — verified deployed on Robinhood Chain (2026-07-13,
     // eth_getCode 3,808 bytes). With this present wagmi/viem AGGREGATES batched
     // reads into a single eth_call — the per-poll read burst (cards, yields,
-    // raid statuses…) collapses from dozens of requests to ~one, which is what
-    // keeps the RPC-proxy Worker inside its free request quota.
+    // raid statuses…) collapses from dozens of requests to ~one — the single
+    // biggest reason the free public endpoint keeps up.
     multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11", blockCreated: 1 },
   },
 });
@@ -52,13 +55,14 @@ const robinhood = defineChain({
 // so each createConfig call has a single-chain literal type (the transports
 // Record must key precisely that chain id).
 //
-// JSON-RPC BATCHING (2026-07-13, request-quota fix): concurrent calls within a
-// tick are folded into ONE HTTP request (the RPC-proxy Worker accepts batches up
-// to 100 — see proxy/rpc-worker.js MAX_BATCH). Together with Multicall3 this
-// collapses the connected-wallet polling burst from dozens of HTTP requests per
-// cycle to ~one, keeping the Worker inside its free daily request quota.
+// JSON-RPC BATCHING (2026-07-13, request-quota fix) + Multicall3 aggregation
+// collapse the connected-wallet polling burst from dozens of requests per cycle
+// to ~one — which is what keeps the free PUBLIC endpoint comfortable for
+// unconnected visitors (batching lives in the HTTP leg of the transport).
 const BATCH = { batch: { batchSize: 50 } } as const;
-const rpcTransports = RPC_URLS.map((url) => http(url, BATCH));
+
+// The read transport for every live chain: wallet-first, public-RPC fallback.
+const readTransport = walletFirstTransport(RPC_URLS);
 
 export const wagmiConfig =
   CHAIN_ENV === "mainnet"
@@ -66,8 +70,7 @@ export const wagmiConfig =
         chains: [mainnet],
         connectors: [injected()],
         transports: {
-          // fallback ranks the configured RPCs, then the chain's public RPC.
-          [mainnet.id]: fallback([...rpcTransports, http(undefined, BATCH)]),
+          [mainnet.id]: readTransport,
         },
         ssr: true,
       })
@@ -76,8 +79,7 @@ export const wagmiConfig =
           chains: [robinhood],
           connectors: [injected()],
           transports: {
-            // fallback ranks the configured RPCs, then the chain's public RPC.
-            [robinhood.id]: fallback([...rpcTransports, http(undefined, BATCH)]),
+            [robinhood.id]: readTransport,
           },
           ssr: true,
         })
@@ -86,7 +88,7 @@ export const wagmiConfig =
             chains: [sepolia],
             connectors: [injected()],
             transports: {
-              [sepolia.id]: fallback([...rpcTransports, http(undefined, BATCH)]),
+              [sepolia.id]: readTransport,
             },
             ssr: true,
           })
@@ -94,7 +96,7 @@ export const wagmiConfig =
             chains: [anvil],
             connectors: [injected()],
             transports: {
-              [anvil.id]: fallback(rpcTransports.length > 0 ? rpcTransports : [http()]),
+              [anvil.id]: http(RPC_URLS[0], BATCH),
             },
             ssr: true, // render disconnected on the server; no per-wallet state in SSR output
           });

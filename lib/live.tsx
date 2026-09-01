@@ -5,9 +5,10 @@
  *
  * Every number in the Snapshot comes from the contract views named in
  * lib/fixtures/types.ts (the fixture shapes are kept as the type contract);
- * enumerations (owned cards, live forges, all-time totals) come from event
- * scans in lib/chain/logs.ts and are re-verified by view reads before any
- * transaction depends on them.
+ * enumerations (owned cards, live forges) come from Multicall3-aggregated VIEW
+ * sweeps in lib/chain/views.ts — exact current state, bounded by the 2,222-card
+ * cap. They replaced full-history event scans, which on a ~10-blocks-per-second
+ * chain had grown to ~43,000 requests per page load and rate-limited every RPC.
  *
  * Wallet state comes from wagmi (injected connector); loading/error states
  * come from the query layer. There is no mock mode and no preview panel.
@@ -22,14 +23,15 @@ import {
   useReadContracts,
   useSwitchChain,
 } from "wagmi";
-import type { Address } from "viem";
+import type { Address, EIP1193Provider } from "viem";
 import type { CardFixture, Snapshot, ForgeView } from "@/lib/fixtures/types";
 import { cardsOnChainAbi, cardsTokenAbi, cardYieldAbi, mintHookAbi, stakingVaultAbi } from "@/lib/contracts/abis";
 import { addressOf } from "@/lib/contracts/config";
 import { chain } from "@/lib/wagmi";
 import { materialOf } from "@/lib/chain/material";
-import { fetchLiveForgeIds, fetchOwnedTokenIds, fetchRewardTotals } from "@/lib/chain/logs";
+import { fetchLiveForgeIds, fetchOwnedTokenIds } from "@/lib/chain/views";
 import { ocardsPerEthFromSqrtPrice, readSqrtPriceX96 } from "@/lib/chain/quote";
+import { setWalletReadProvider } from "@/lib/chain/walletTransport";
 
 export type DataMode = "success" | "loading" | "empty" | "error";
 
@@ -41,6 +43,7 @@ const EMPTY_SNAPSHOT: Snapshot = {
   now: 0n,
   cardsOnChain: {
     totalSupply: 0n,
+    totalEverMinted: 0n,
     maxSupply: 2222n,
     remainingMintable: 2222n,
     tierCount: [0n, 0n, 0n, 0n, 0n],
@@ -64,7 +67,6 @@ const EMPTY_SNAPSHOT: Snapshot = {
     forges: {},
   },
   cardYield: { totalWeight: 0n, claimable: 0n },
-  eventTotals: { stakerRewardsDeposited: 0n, cardYieldDeposited: 0n },
   curve: { ocardsPerEth: 0n },
   myCards: [],
   sweepableIds: [],
@@ -88,7 +90,7 @@ const LiveContext = createContext<LiveState | null>(null);
 export function LiveProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const publicClient = usePublicClient();
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId, connector } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
@@ -96,6 +98,33 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
   const wallet = (address ?? ZERO) as Address;
   const connected = isConnected && !!address;
   const wrongNetwork = connected && chainId !== chain.id;
+
+  // Reads follow the wallet (owner decision 2026-09-01): once connected, the
+  // visitor's own wallet RPC serves reads instead of the shared public
+  // endpoint — see lib/chain/walletTransport.ts. Registered ONLY while the
+  // wallet is on the pinned chain: a wallet parked on another network would
+  // answer from THAT chain, so on a mismatch we stay on the public RPC and the
+  // "wrong network" banner asks the user to switch. Cleared on disconnect and
+  // on unmount so a stale provider can never serve reads.
+  useEffect(() => {
+    let cancelled = false;
+    if (!isConnected || !connector || chainId !== chain.id) {
+      setWalletReadProvider(null);
+      return;
+    }
+    connector
+      .getProvider()
+      .then((provider) => {
+        if (!cancelled) setWalletReadProvider((provider as EIP1193Provider) ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setWalletReadProvider(null);
+      });
+    return () => {
+      cancelled = true;
+      setWalletReadProvider(null);
+    };
+  }, [isConnected, connector, chainId]);
 
   const cards = addressOf("cardsOnChain");
   const token = addressOf("cardsToken");
@@ -133,6 +162,8 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
       { address: cards, abi: cardsOnChainAbi, functionName: "tierDuration", args: [3] }, // 20
       { address: cards, abi: cardsOnChainAbi, functionName: "tierDuration", args: [4] }, // 21
       { address: vault, abi: stakingVaultAbi, functionName: "RAID_GRACE" }, // 22
+      // 23 — drives the collection view sweeps below (ids are 1..totalEverMinted).
+      { address: cards, abi: cardsOnChainAbi, functionName: "totalEverMinted" }, // 23
     ],
     query: { refetchInterval: POLL_MS },
   });
@@ -153,25 +184,24 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
     query: { enabled: connected, refetchInterval: POLL_MS },
   });
 
-  // ------------------------------------------------------------- event scans
+  // --------------------------------------------------- collection enumeration
+  // View sweeps over the collection (lib/chain/views.ts), NOT log scans: on a
+  // ~10-blocks-per-second chain a full-history scan had grown to ~43,000
+  // requests per page load and rate-limited every RPC. These cost a handful of
+  // Multicall3-aggregated `eth_call`s and stay bounded by the 2,222-card cap.
+  const totalEverMinted = (protocolQ.data?.[23] as bigint | undefined) ?? 0n;
+
   const ownedIdsQ = useQuery({
-    queryKey: ["ownedTokenIds", wallet],
-    queryFn: () => fetchOwnedTokenIds(publicClient!, wallet),
-    enabled: connected && !!publicClient,
+    queryKey: ["ownedTokenIds", wallet, totalEverMinted.toString()],
+    queryFn: () => fetchOwnedTokenIds(publicClient!, wallet, totalEverMinted),
+    enabled: connected && !!publicClient && totalEverMinted > 0n,
     refetchInterval: LOG_POLL_MS,
   });
 
   const liveForgeIdsQ = useQuery({
-    queryKey: ["liveForgeIds"],
-    queryFn: () => fetchLiveForgeIds(publicClient!),
-    enabled: !!publicClient,
-    refetchInterval: LOG_POLL_MS,
-  });
-
-  const rewardTotalsQ = useQuery({
-    queryKey: ["rewardTotals"],
-    queryFn: () => fetchRewardTotals(publicClient!),
-    enabled: !!publicClient,
+    queryKey: ["liveForgeIds", totalEverMinted.toString()],
+    queryFn: () => fetchLiveForgeIds(publicClient!, totalEverMinted),
+    enabled: !!publicClient && totalEverMinted > 0n,
     refetchInterval: LOG_POLL_MS,
   });
 
@@ -295,6 +325,7 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
       now: nowSec,
       cardsOnChain: {
         totalSupply: p[0] as bigint,
+        totalEverMinted: p[23] as bigint,
         maxSupply: 2222n,
         remainingMintable: p[1] as bigint,
         tierCount: [p[2], p[3], p[4], p[5], p[6]] as Snapshot["cardsOnChain"]["tierCount"],
@@ -331,7 +362,6 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
         totalWeight: p[16] as bigint,
         claimable: (w?.[7] as bigint) ?? 0n,
       },
-      eventTotals: rewardTotalsQ.data ?? EMPTY_SNAPSHOT.eventTotals,
       curve: { ocardsPerEth: curveQ.data ?? 0n },
       myCards,
       sweepableIds,
@@ -345,7 +375,6 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
     cardsDetailQ.data,
     forgesQ.data,
     allForgeIds,
-    rewardTotalsQ.data,
     curveQ.data,
     nowSec,
   ]);
@@ -354,8 +383,7 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
     protocolQ.isError ||
     (connected && (walletQ.isError || ownedIdsQ.isError || cardsDetailQ.isError)) ||
     liveForgeIdsQ.isError ||
-    forgesQ.isError ||
-    rewardTotalsQ.isError;
+    forgesQ.isError;
 
   const stillLoading =
     protocolQ.isPending ||

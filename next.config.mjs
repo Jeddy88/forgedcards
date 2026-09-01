@@ -21,9 +21,10 @@ const DEFAULT_RPC = {
   local: "http://127.0.0.1:8545",
   // Public keyless Sepolia endpoint — MUST match lib/contracts/config.ts.
   sepolia: "https://ethereum-sepolia-rpc.publicnode.com",
-  // Worker proxy (keyless, key lives server-side) + public RPC fallback —
-  // MUST match lib/contracts/config.ts (the CSP allows exactly these origins).
-  robinhood: "https://rpc-worker.forgedcardsv4.workers.dev,https://rpc.mainnet.chain.robinhood.com",
+  // Official public keyless RPC — MUST match lib/contracts/config.ts (the CSP
+  // allows exactly these origins). Wallet-routed reads do NOT need a CSP entry:
+  // they go through the extension's provider, not a page fetch.
+  robinhood: "https://rpc.mainnet.chain.robinhood.com",
   mainnet: "https://ethereum-rpc.publicnode.com,https://eth.llamarpc.com",
 };
 const rpcOrigins = (process.env.NEXT_PUBLIC_RPC_URLS ?? DEFAULT_RPC[CHAIN] ?? "")

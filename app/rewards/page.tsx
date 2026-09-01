@@ -41,26 +41,6 @@ export default function RewardsPage() {
         lede="Every swap pays somebody: 1% of buys goes to FORGE stakers, 1% of sells goes to card holders weighted by tier. Both use a pull pattern — settle, then withdraw."
       />
 
-      {/* protocol-wide totals */}
-      {dataMode === "success" || dataMode === "empty" ? (
-        <Panel className="mb-8 p-6">
-          <dl className="grid grid-cols-2 gap-6">
-            <Stat
-              label="All-time to stakers"
-              value={formatEth(snap.eventTotals.stakerRewardsDeposited)}
-              sub="1% of every buy's ETH"
-              source="Σ StakingVault.RewardsDeposited events"
-            />
-            <Stat
-              label="All-time to card holders"
-              value={formatEth(snap.eventTotals.cardYieldDeposited)}
-              sub="1% of every sell's ETH"
-              source="Σ CardYield.RewardsDeposited events"
-            />
-          </dl>
-        </Panel>
-      ) : null}
-
       {dataMode === "loading" ? (
         <div className="grid gap-4 md:grid-cols-2">
           <SkeletonPanel lines={6} />

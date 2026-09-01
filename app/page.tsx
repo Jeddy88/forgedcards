@@ -110,18 +110,6 @@ export default function LandingPage() {
                 sub={`${percentOf(snap.stakingVault.totalStaked, snap.cardsToken.totalSupply)} of the fixed 1,000,000 supply`}
                 source="StakingVault.totalStaked() / CardsToken.totalSupply()"
               />
-              <Stat
-                label="Paid to token stakers"
-                value={formatEth(snap.eventTotals.stakerRewardsDeposited)}
-                sub="1% of every buy"
-                source="Σ StakingVault.RewardsDeposited events"
-              />
-              <Stat
-                label="Paid to card holders"
-                value={formatEth(snap.eventTotals.cardYieldDeposited)}
-                sub="1% of every sell"
-                source="Σ CardYield.RewardsDeposited events"
-              />
             </dl>
           </Panel>
         )}
